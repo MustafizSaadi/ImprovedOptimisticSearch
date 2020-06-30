@@ -36,12 +36,12 @@ class focalMakeNode(makeNode):
     def priority_fun(self):
         x = self.h
         y = self.g
-        f = self.g + ((2*self.w-1)*self.h)
+        #f = self.g + ((2*self.w-1)*self.h)
         #f = (self.g/self.w) + self.h
         #XDP
         #f = float((1/(2*self.w)))*float(y + (2*self.w - 1)*x + math.sqrt((y - x)**2 + 4*self.w*y*x))
         #XUP
-        #f = float((1/(2*self.w))) * float(y + x + math.sqrt((y + x)**2 + 4*self.w*(self.w-1)*(x**2)))
+        f = float((1/(2*self.w))) * float(y + x + math.sqrt((y + x)**2 + 4*self.w*(self.w-1)*(x**2)))
         return f 
     def __lt__(self,other):
         return self.priority_fun()<other.priority_fun()
@@ -76,15 +76,18 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
     opn = []
     focal = []
     closed = []
+    anopen = []
     #answer = []
     opnDict = {}
     focalDict = {}
     closedDict = {}
     #answerDict = {}
-    h = abs(enrow-strow) + abs(encol-stcol) + random.randint(1,10)
+    h = abs(enrow-strow) + abs(encol-stcol)
 
-    u = makeNode2(strow,stcol,0,h,w,None)
+    u = makeNode(strow,stcol,0,h,None)
     fu = focalMakeNode(strow,stcol,0,h,w,None)
+    anop = makeNode2(strow,stcol,0,h,w,None)
+
     soln = solution(float('inf'),None)
 
     opnDict[(u.row,u.col)] = u.g
@@ -92,6 +95,7 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
 
     hq.heappush(opn,u)
     hq.heappush(focal,fu)
+    hq.heappush(anopen,anop)
     #hq.heappush(answer,soln)
     while True:
         #print(len(opn),"open")
@@ -99,6 +103,7 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
             break
         hq.heapify(opn)
         hq.heapify(focal)
+        hq.heapify(anopen)
         #print_list(opn,"Open")
         #print_list(focal,"Focal")
         if soln.cost<=(opn[0].priority_fun())*w:
@@ -120,13 +125,23 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
                         opn.remove(i)
                         hq.heapify(opn)
                         break
+                for i in anopen:
+                    if i.row == u.row and i.col == u.col:
+                        anopen.remove(i)
+                        hq.heapify(anopen)
+                        break
 
                 if u.row == enrow and u.col == encol:
                     # if u.g <= w*focal[0].priority_fun():
                     #     soln = solution(u.g,u)
                     #     return nodeExpand,soln.cost,True
                     if u.g<soln.cost:
+                        print("Temporary solution")
                         soln = solution(u.g,u)
+                        if soln.cost <= (w*anopen[0].priority_fun()):
+                            print(soln.cost,"AnswerIOS")
+                            print(nodeExpand,"NodeExpandIOS")
+                            return nodeExpand,soln.cost,True
                         #hq.heappush(answer,soln)
                 else:
                     for it in range(8):
@@ -135,15 +150,31 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
                         if(0<=p and p<dimx and 0<=q and q<dimy and map[p][q] != -1 and not ((p,q) in closedDict) and not ((p,q) in opnDict) and not ((p,q) in focalDict) ):
                             #Do i need to see whether there is an another way to find optimal path
                             nodeExpand += 1
-                            h = abs(p-enrow) + abs(q-encol) + random.randint(1,10)
-                            c = makeNode2(p,q,u.g+cost[it],h,w,u)
+                            h = abs(p-enrow) + abs(q-encol)
+                            c = makeNode(p,q,u.g+cost[it],h,u)
                             cfu = focalMakeNode(p,q,u.g+cost[it],h,w,u)
+                            anop = makeNode2(p,q,u.g+cost[it],h,w,u)
                             opnDict[(p,q)] = u.g + cost[it]
                             focalDict[(p,q)] = u.g + cost[it]
                             hq.heappush(opn,c)
                             hq.heappush(focal,cfu)
+                            hq.heappush(anopen,anop)
             else:
                 n = hq.heappop(opn)
+
+                print("In open")
+                
+                delete = opnDict.pop((n.row,n.col))
+                if not ((n.row,n.col) in closedDict) :
+                    closed.append(n)
+                    closedDict[(n.row,n.col)] = n.g
+
+                for i in anopen:
+                    if i.row == n.row and i.col == n.col:
+                        anopen.remove(i)
+                        hq.heapify(anopen)
+                        break
+
                 #print("Yes")
                 for it in range(8):
                     p = n.row+dirx[it]
@@ -159,6 +190,11 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
                                     #print(p,q,i.priority_fun())
                                     hq.heapify(opn)
                                     break
+                            for i in anopen:
+                                if i.row == n.row and i.col == n.col:
+                                    i.g = opnDict[(p,q)]
+                                    hq.heapify(anopen)
+                                    break
     #                     # elif (p,q) in focalDict and focalDict[(p,q)]>n.g +1:
     #                     #         #Update cost of child in focal
     #                     #     print("In focal")
@@ -171,13 +207,15 @@ def IOSPathfinding(map,strow,stcol,enrow,encol,w):
                         elif(not ((p,q) in closedDict) and not ((p,q) in opnDict)):
                             #print("In None")
                             nodeExpand += 1
-                            h = abs(p-enrow) + abs(q-encol) + random.randint(1,10)                                
-                            c = makeNode2(p,q,u.g+cost[it],h,w,n)
-                            cfu = focalMakeNode(p,q,u.g+cost[it],h,w,n)
-                            opnDict[(p,q)] = u.g + cost[it]
-                            focalDict[(p,q)] = u.g + cost[it]
+                            h = abs(p-enrow) + abs(q-encol)                                
+                            c = makeNode(p,q,n.g+cost[it],h,n)
+                            cfu = focalMakeNode(p,q,n.g+cost[it],h,w,n)
+                            anop = makeNode2(p,q,n.g+cost[it],h,w,n)
+                            opnDict[(p,q)] = n.g + cost[it]
+                            focalDict[(p,q)] = n.g + cost[it]
                             hq.heappush(opn,c)
                             hq.heappush(focal,cfu)
+                            hq.heappush(anopen,anop)
     #                     # else:
     #                     #     #print("In close or open")
     return nodeExpand,-1,False
@@ -234,7 +272,7 @@ def AStarEpsilon(map,strow,stcol,enrow,encol,w):
     opnDict = {}
     closedDict = {}
     
-    h = abs(enrow-strow) + abs(encol-stcol) + random.randint(1,10)
+    h = abs(enrow-strow) + abs(encol-stcol)
 
     u = makeNode(strow,stcol,0,h,None)
 
@@ -288,7 +326,7 @@ def AStarEpsilon(map,strow,stcol,enrow,encol,w):
                             #print("Child")
                             #print(p,q)
                             nodeExpand += 1
-                            h = abs(p-enrow) + abs(q-encol) + random.randint(1,10)
+                            h = abs(p-enrow) + abs(q-encol)
                             c = makeNode(p,q,u.g+cost[it],h,u)
                             #print(p,q,c.priority_fun())
                             #cfu = focalMakeNode(p,q,u.g+1,h,w,u)
@@ -412,7 +450,7 @@ def init():
     random.seed = 0
     a = []
     i = 0
-    f = open("dao-map/lak503d.map","r")
+    f = open("dao-map/den401d.map","r")
     dimx = -1
     dimy = -1
 
@@ -467,7 +505,7 @@ def init():
             # encol = 41
             flag = True
             print(strow,stcol,enrow,encol,abs(enrow-strow)+abs(encol-stcol))
-            w=3
+            w=1.75
             node1,val1,flag = IOSPathfinding(a,strow,stcol,enrow,encol,w)
             if flag:
                 nodeExpandIOS += node1
